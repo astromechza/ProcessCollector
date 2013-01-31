@@ -71,14 +71,14 @@ class ProcessCollector(diamond.collector.Collector):
     def get_default_config(self):
         """
         Default settings are:
-            path: 'memory.process'
+            path: 'process_stats'
             unit: 'B'
             separate_pids: True
             naming_method: process_name
         """
         config = super(ProcessCollector, self).get_default_config()
         config.update({
-            'path': 'memory.process',
+            'path': 'process_stats',
             'unit': 'B',
             'process': '',
             'separate_pids': True,
