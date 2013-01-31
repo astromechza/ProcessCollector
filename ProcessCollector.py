@@ -22,6 +22,7 @@ exe and name are both lists of comma-separated regexps.
 import re
 import diamond.collector
 import diamond.convertor
+import time
 
 try:
     import psutil
@@ -56,6 +57,10 @@ def process_filter(proc, cfg):
 
 
 class ProcessCollector(diamond.collector.Collector):
+
+    def __init__(self, config, handlers):
+        super(ProcessCollector, self).__init__(config, handlers)
+        self.last_reload = 0
 
     def get_default_config_help(self):
         config_help = super(ProcessCollector, self).get_default_config_help()
@@ -130,26 +135,31 @@ class ProcessCollector(diamond.collector.Collector):
         Collects the CPU and memory usage of each process defined under the
         `process` subsection of the config file
         """
-        self.setup_config()
-        self.filter_processes()
+
+        # Only reload the process list every 10 seconds,
+        if time.time() - self.last_reload > 10:
+            self.setup_config()
+            self.filter_processes()
+            self.last_reload = time.time()
 
         unit = self.config['unit']
         naming_method = self.config.get('naming_method', 'process_name')
         for process, cfg in self.processes.items():
             for pid, proc in cfg['procs'].items():
-                cpu = proc.get_cpu_percent(interval=0)
-                mem = proc.get_memory_info().rss
+                if proc.is_running():
+                    cpu = proc.get_cpu_percent(interval=0)
+                    mem = proc.get_memory_info().rss
 
-                metric_prefix = process if cfg.get('naming_method', naming_method) == 'config_title' else proc.name
-                metric_prefix = metric_prefix.replace('.', '_')
+                    metric_prefix = process if cfg.get('naming_method', naming_method) == 'config_title' else proc.name
+                    metric_prefix = metric_prefix.replace('.', '_')
 
-                if self.config['separate_pids']:
-                    metric_prefix = '.'.join([metric_prefix, str(pid)])
+                    if self.config['separate_pids']:
+                        metric_prefix = '.'.join([metric_prefix, str(pid)])
 
-                metric_name = '.'.join([metric_prefix, 'cpu'])
-                metric_value = cpu
-                self.publish(metric_name, metric_value)
+                    metric_name = '.'.join([metric_prefix, 'cpu'])
+                    metric_value = cpu
+                    self.publish(metric_name, metric_value)
 
-                metric_name = '.'.join([metric_prefix, 'ram'])
-                metric_value = diamond.convertor.binary.convert(mem, oldUnit='byte', newUnit=unit)
-                self.publish(metric_name, metric_value)
+                    metric_name = '.'.join([metric_prefix, 'ram'])
+                    metric_value = diamond.convertor.binary.convert(mem, oldUnit='byte', newUnit=unit)
+                    self.publish(metric_name, metric_value)
